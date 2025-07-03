@@ -8,7 +8,7 @@ import "./interface/IrtERC20.sol";
 import "./utils/SafeMath.sol";
 import "./utils/TransferHelper.sol";
 
-contract rtMNERRebase is Ownable {
+contract rtERC20Rebase is Ownable {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 

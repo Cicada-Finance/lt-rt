@@ -13,14 +13,14 @@ interface IltERC20Price is IERC20 {
     function getPrice() external returns (uint256);
 }
 
-contract rtMNERConvert is Ownable, ReentrancyGuard {
+contract rtConvert is Ownable, ReentrancyGuard {
     using SafeMath for uint256;
     using SafeERC20 for IERC20;
 
     address public immutable ltToken;
     address public immutable rtToken;
     address public ltPrice;
-    address public feeReceive;
+    address public feeReceive = 0x2cb60503C20027EE80502Dc291d09F36DfED026E;
     bool public enabledConvertIn = true;
     bool public enabledConvertOut = true;
     uint256 public rate = 10000;
@@ -50,8 +50,7 @@ contract rtMNERConvert is Ownable, ReentrancyGuard {
         address _rtToken,
         address _price,
         address _admin,
-        address _assetManger,
-        address _feeReceive
+        address _assetManger
     ) Ownable(msg.sender) {
         require(_price != address(0), "Cannot be zero address");
         require(_assetManger != address(0), "Cannot be zero address");
@@ -63,7 +62,6 @@ contract rtMNERConvert is Ownable, ReentrancyGuard {
         ltPrice = _price;
         admin = _admin;
         assetManager = _assetManger;
-        feeReceive = _feeReceive;
     }
 
     function convert(address tokenA, uint256 _amount) public payable nonReentrant {

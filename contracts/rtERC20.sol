@@ -7,7 +7,9 @@ import "./utils/SafeMath.sol";
 import "./utils/SafeMathInt.sol";
 import "./utils/Ownable.sol";
 
-contract rtMNER is IERC20, Ownable {
+import "./interface/IrtAutoRebase.sol";
+
+contract rtERC20 is IERC20, Ownable {
     using SafeMath for uint256;
     using SafeMathInt for int256;
 
@@ -29,6 +31,7 @@ contract rtMNER is IERC20, Ownable {
 
     address public monetaryPolicy;
     address public exchangePolicy;
+    address public rtAutoRebase;
 
     modifier onlyMonetaryPolicy() {
         require(msg.sender == monetaryPolicy || msg.sender == owner(), "permissions error");
@@ -53,9 +56,12 @@ contract rtMNER is IERC20, Ownable {
     event LogMonetaryPolicyUpdated(address monetaryPolicy);
     event LogExchangePolicyUpdated(address exchangePolicy);
 
-    constructor(string memory name_, string memory symbol_) Ownable(msg.sender) {
+    error BlackContractInvalid(address owner);
+
+    constructor(string memory name_, string memory symbol_, address _rtAutoRebase) Ownable(msg.sender) {
         _name = name_;
         _symbol = symbol_;
+        rtAutoRebase = _rtAutoRebase;
     }
 
     function mintTo(address to, uint256 _amount) public onlyExchangePolicy {
@@ -67,6 +73,11 @@ contract rtMNER is IERC20, Ownable {
         require(monetaryPolicy_ != address(0), "Cannot be zero address");
         monetaryPolicy = monetaryPolicy_;
         emit LogMonetaryPolicyUpdated(monetaryPolicy_);
+    }
+
+    function setAutoRelease(address _autoRebase) external onlyOwner {
+        require(_autoRebase != address(0), "Cannot be zero address");
+        rtAutoRebase = _autoRebase;
     }
 
     // update the exchanger
@@ -109,11 +120,17 @@ contract rtMNER is IERC20, Ownable {
     }
 
     function _rtTotalSupply() internal view returns (uint256) {
-        return _totalSupply;
+        uint256 autoAmt = 0;
+
+        try IrtAutoRebase(rtAutoRebase).rebaseAmount() returns (uint256 amt) {
+            autoAmt = amt;
+        } catch {}
+
+        return _totalSupply + autoAmt;
     }
 
     function balanceOf(address _account) public view override returns (uint256) {
-        return sharesOfAmount(_sharesOf(_account));
+        return getRShares(_sharesOf(_account));
     }
 
     function transfer(address _recipient, uint256 _amount) public virtual override returns (bool) {
@@ -161,23 +178,23 @@ contract rtMNER is IERC20, Ownable {
         return _sharesOf(_account);
     }
 
-    function amountOfShares(uint256 _rAmount) public view returns (uint256) {
+    function getSharesByR2(uint256 _rAmount) public view returns (uint256) {
         return _rAmount.mul(_getTotalShares()).div(_rtTotalSupply());
     }
 
-    function sharesOfAmount(uint256 _sharesAmount) public view returns (uint256) {
+    function getRShares(uint256 _sharesAmount) public view returns (uint256) {
         return _sharesAmount.mul(_rtTotalSupply()).div(_getTotalShares());
     }
 
     function transferShares(address _recipient, uint256 _sharesAmount) external returns (uint256) {
         _transferShares(msg.sender, _recipient, _sharesAmount);
-        uint256 tokensAmount = sharesOfAmount(_sharesAmount);
+        uint256 tokensAmount = getRShares(_sharesAmount);
         _emitTransferEvents(msg.sender, _recipient, tokensAmount, _sharesAmount);
         return tokensAmount;
     }
 
     function transferSharesFrom(address _sender, address _recipient, uint256 _sharesAmount) external returns (uint256) {
-        uint256 tokensAmount = sharesOfAmount(_sharesAmount);
+        uint256 tokensAmount = getRShares(_sharesAmount);
         _spendAllowance(_sender, msg.sender, tokensAmount);
         _transferShares(_sender, _recipient, _sharesAmount);
         _emitTransferEvents(_sender, _recipient, tokensAmount, _sharesAmount);
@@ -185,7 +202,7 @@ contract rtMNER is IERC20, Ownable {
     }
 
     function _transfer(address _sender, address _recipient, uint256 _amount) internal virtual {
-        uint256 _sharesToTransfer = amountOfShares(_amount);
+        uint256 _sharesToTransfer = getSharesByR2(_amount);
 
         _transferShares(_sender, _recipient, _sharesToTransfer);
         _emitTransferEvents(_sender, _recipient, _amount, _sharesToTransfer);
@@ -230,7 +247,7 @@ contract rtMNER is IERC20, Ownable {
     function _mint(address account, uint256 amount) internal virtual {
         require(account != address(0), "ERC20: mint to the zero address");
 
-        uint256 _sharesAmount = _rtTotalSupply() == 0 ? amount : amountOfShares(amount);
+        uint256 _sharesAmount = _rtTotalSupply() == 0 ? amount : getSharesByR2(amount);
 
         shares[account] = shares[account].add(_sharesAmount);
 
@@ -257,7 +274,7 @@ contract rtMNER is IERC20, Ownable {
         uint256 accountBalance = balanceOf(account);
         require(accountBalance >= amount, "ERC20: burn amount exceeds balance");
 
-        uint256 _sharesAmount = amountOfShares(amount);
+        uint256 _sharesAmount = getSharesByR2(amount);
 
         shares[account] = shares[account].sub(_sharesAmount);
 
@@ -274,14 +291,14 @@ contract rtMNER is IERC20, Ownable {
         uint256 accountShares = shares[_account];
         require(_sharesAmount <= accountShares, "BALANCE_EXCEEDED");
 
-        uint256 preRebaseTokenAmount = sharesOfAmount(_sharesAmount);
+        uint256 preRebaseTokenAmount = getRShares(_sharesAmount);
 
         newTotalShares = _getTotalShares().sub(_sharesAmount);
 
         _totalShares = newTotalShares;
         shares[_account] = accountShares.sub(_sharesAmount);
 
-        uint256 postRebaseTokenAmount = sharesOfAmount(_sharesAmount);
+        uint256 postRebaseTokenAmount = getRShares(_sharesAmount);
 
         emit SharesBurnt(_account, preRebaseTokenAmount, postRebaseTokenAmount, _sharesAmount);
     }
@@ -292,6 +309,6 @@ contract rtMNER is IERC20, Ownable {
     }
 
     function _emitTransferAfterMintingShares(address _to, uint256 _sharesAmount) internal {
-        _emitTransferEvents(address(0), _to, sharesOfAmount(_sharesAmount), _sharesAmount);
+        _emitTransferEvents(address(0), _to, getRShares(_sharesAmount), _sharesAmount);
     }
 }

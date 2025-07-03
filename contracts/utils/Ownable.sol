@@ -2,7 +2,8 @@
 // OpenZeppelin Contracts (last updated v5.0.0) (access/Ownable.sol)
 
 pragma solidity ^0.8.7;
-import "@openzeppelin/contracts/utils/Context.sol";
+
+import {Context} from "./Context.sol";
 
 /**
  * @dev Contract module which provides a basic access control mechanism, where

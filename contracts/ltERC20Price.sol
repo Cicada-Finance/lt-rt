@@ -12,11 +12,10 @@ contract ltERC20Price {
     address public pool2;
     address public weth;
 
-    constructor(address pool_, address _pool2, address _ltToken, address _weth) {
+    constructor(address pool_, address _pool2, address _ltToken) {
         pool = pool_;
         pool2 = _pool2;
         ltToken = _ltToken;
-        weth = _weth;
     }
 
     function getPrice() external view returns (uint256) {
